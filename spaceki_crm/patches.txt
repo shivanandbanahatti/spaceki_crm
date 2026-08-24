@@ -1,0 +1,10 @@
+[pre_model_sync]
+
+[post_model_sync]
+spaceki_crm.patches.v1_0.ensure_custom_fields
+spaceki_crm.patches.v1_0.apply_phase_a_customizations
+spaceki_crm.patches.v1_0.apply_deal_pipeline
+spaceki_crm.patches.v1_0.set_deals_kanban_default
+spaceki_crm.patches.v1_0.backfill_deal_display
+spaceki_crm.patches.v1_0.reconfigure_record_layouts
+spaceki_crm.patches.v1_0.rename_zoho_company_label

@@ -1,0 +1,16 @@
+export const RECORD_TAB_LIST_CLASSES = [
+  'flex flex-1 min-h-0 overflow-hidden flex-col',
+  '[&_[data-reka-tabs-indicator]]:hidden',
+  '[&_[role=tablist]]:relative [&_[role=tablist]]:z-10',
+  '[&_[role=tablist]]:mx-3 [&_[role=tablist]]:mb-0 [&_[role=tablist]]:mt-2',
+  '[&_[role=tablist]]:flex [&_[role=tablist]]:w-auto [&_[role=tablist]]:gap-1',
+  '[&_[role=tablist]]:overflow-x-auto [&_[role=tablist]]:rounded-xl',
+  '[&_[role=tablist]]:border [&_[role=tablist]]:border-outline-gray-2',
+  '[&_[role=tablist]]:bg-surface-white [&_[role=tablist]]:p-1.5',
+  '[&_[role=tablist]]:shadow-sm sm:[&_[role=tablist]]:mx-6',
+  '[&_[role=tab]]:relative [&_[role=tab]]:z-[1]',
+  '[&_[role=tabpanel]]:min-h-0 [&_[role=tabpanel]]:overflow-hidden',
+  "[&_[role=tabpanel']:not([hidden])]:flex",
+  "[&_[role=tabpanel']:not([hidden])]:grow",
+  "[&_[role=tabpanel']:not([hidden])]:flex-col",
+].join(' ')
