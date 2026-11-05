@@ -8,3 +8,7 @@ spaceki_crm.patches.v1_0.set_deals_kanban_default
 spaceki_crm.patches.v1_0.backfill_deal_display
 spaceki_crm.patches.v1_0.reconfigure_record_layouts
 spaceki_crm.patches.v1_0.rename_zoho_company_label
+spaceki_crm.patches.v1_0.fix_erpnext_customer_trigger
+spaceki_crm.patches.v1_0.ensure_whatsapp_lead_source
+spaceki_crm.patches.v1_0.sync_whatsapp_settings_and_lead_names
+spaceki_crm.patches.v1_0.ensure_sales_user_crm_perms

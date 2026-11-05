@@ -28,6 +28,9 @@ def get_related_counts(doctype: str, name: str) -> dict:
 			{"reference_doctype": doctype, "reference_name": name, "comment_type": "Comment"},
 		),
 		"boq": 0,
+		"quotations": 0,
+		"quotation_drafts": 0,
+		"project": None,
 		"erpnext_enabled": _erpnext_enabled(),
 	}
 	counts["work"] = counts["tasks"] + counts["comments"]
@@ -37,5 +40,21 @@ def get_related_counts(doctype: str, name: str) -> dict:
 			counts["boq"] = frappe.db.count("Deal BOQ Item", {"lead": name})
 		elif doctype == "CRM Deal":
 			counts["boq"] = frappe.db.count("Deal BOQ Item", {"deal": name})
+
+	if (
+		doctype == "CRM Deal"
+		and frappe.db.exists("DocType", "Quotation")
+		and frappe.get_meta("Quotation").has_field("crm_deal")
+	):
+		counts["quotations"] = frappe.db.count("Quotation", {"crm_deal": name, "docstatus": ["<", 2]})
+		counts["quotation_drafts"] = frappe.db.count("Quotation", {"crm_deal": name, "docstatus": 0})
+
+	if doctype == "CRM Deal" and frappe.db.exists("DocType", "Project"):
+		project = None
+		if frappe.get_meta("CRM Deal").has_field("custom_project"):
+			project = frappe.db.get_value("CRM Deal", name, "custom_project")
+		if not project and frappe.get_meta("Project").has_field("crm_deal"):
+			project = frappe.db.get_value("Project", {"crm_deal": name}, "name")
+		counts["project"] = project
 
 	return counts

@@ -21,6 +21,8 @@ FRONTEND_FILES = (
 	"components/Record/RecordHero.vue",
 	"components/Record/RecordTabItem.vue",
 	"components/Record/DealContactsSection.vue",
+	"components/Record/DealQuotationsSection.vue",
+	"components/Record/DealProjectSection.vue",
 	"components/Record/DocumentNavButtons.vue",
 	"composables/useRelatedCounts.js",
 	"composables/useDocumentNav.js",

@@ -42,6 +42,14 @@
             :organization="document.doc?.organization || ''"
             @organization-created="(name) => updateOrganization(name)"
           />
+          <DealQuotationsSection
+            v-if="doctype === 'CRM Deal'"
+            :deal-id="docname"
+          />
+          <DealProjectSection
+            v-if="doctype === 'CRM Deal'"
+            :deal-id="docname"
+          />
           <div class="overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white shadow-sm">
             <FieldLayout
               v-if="tabs.data"
@@ -73,6 +81,8 @@ import EditIcon from '@/components/Icons/EditIcon.vue'
 import DataFieldsModal from '@/components/Modals/DataFieldsModal.vue'
 import FieldLayout from '@/components/FieldLayout/FieldLayout.vue'
 import DealContactsSection from '@/components/Record/DealContactsSection.vue'
+import DealQuotationsSection from '@/components/Record/DealQuotationsSection.vue'
+import DealProjectSection from '@/components/Record/DealProjectSection.vue'
 import { Badge, createResource } from 'frappe-ui'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import { usersStore } from '@/stores/users'

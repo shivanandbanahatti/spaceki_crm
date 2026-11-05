@@ -322,11 +322,13 @@ onMounted(async () => {
   $socket.on('crm_customer_created', () => {
     toast.success(__('Customer Created Successfully'))
   })
+  $socket.on('deal_project_created', onDealProjectCreated)
   if (document.doc) await triggerOnRender()
 })
 
 onBeforeUnmount(() => {
   $socket.off('crm_customer_created')
+  $socket.off('deal_project_created', onDealProjectCreated)
 })
 
 const reload = ref(false)
@@ -425,7 +427,7 @@ const tabs = computed(() => {
     },
     {
       name: 'ERPNext',
-      label: __('ERPNext'),
+      label: countLabel('ERPNext', 'quotations'),
       icon: LinkIcon,
       condition: () => erpnextInstalled.value,
     },
@@ -505,7 +507,12 @@ function updateField(name, value) {
   }
 
   document.save.submit(null, {
-    onSuccess: () => (reload.value = true),
+    onSuccess: () => {
+      reload.value = true
+      if (name === 'status' || (Array.isArray(name) && name.includes('status'))) {
+        ensureDealProject(doc.value?.status)
+      }
+    },
     onError: (err) => {
       if (Array.isArray(name)) {
         name.forEach((field) => (doc.value[field] = oldValues[field]))
@@ -581,10 +588,100 @@ function reloadResources(data) {
   if (Object.hasOwn(data ?? {}, 'deal_owner')) {
     assignees.reload()
   }
+  if (Object.hasOwn(data ?? {}, 'status') || doc.value?.status === 'Closed Won') {
+    ensureDealProject(data?.status || doc.value?.status)
+  }
+}
 
+function onDealProjectCreated(data) {
+  if (!data || data.deal !== props.dealId) return
+  if (doc.value && data.project) {
+    doc.value.custom_project = data.project
+  }
+  if (data.created && !projectToastShown.value) {
+    projectToastShown.value = true
+    toast.success(__('Project {0} created — use Open Project', [data.project]))
+  }
+  applyOpenProjectAction(data)
+  counts.reload()
+}
+
+const projectToastShown = ref(false)
+
+watch(
+  () => props.dealId,
+  () => {
+    projectToastShown.value = false
+  },
+)
+
+function applyOpenProjectAction(info) {
+  if (!info?.url) return
+  const actions = document.actions || []
+  document.actions = actions.filter((a) => !a._isDealProject)
+  document.actions.push({
+    label: __('Open Project'),
+    _isDealProject: true,
+    onClick: () => window.open(info.url, '_blank'),
+  })
+}
+
+async function ensureDealProject(status) {
+  if (status !== 'Closed Won') return
+  // Project is created after_commit — poll briefly so Open Project appears without refresh
+  const hadProject = !!doc.value?.custom_project
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 400))
+    try {
+      const action = await call(
+        'cost_estimate.estimation.project_from_deal.get_deal_project_action',
+        { crm_deal: props.dealId },
+      )
+      if (action?.has_project && action.project) {
+        if (doc.value) doc.value.custom_project = action.project
+        applyOpenProjectAction(action)
+        if (!hadProject && !projectToastShown.value) {
+          projectToastShown.value = true
+          toast.success(
+            __('Project {0} created — use Open Project', [action.project]),
+          )
+        }
+        counts.reload()
+        return
+      }
+    } catch (e) {
+      /* retry */
+    }
+  }
+  // Fallback: force-create if hook missed
+  try {
+    const project = await call(
+      'cost_estimate.estimation.project_from_deal.ensure_project_for_deal',
+      { deal: props.dealId, quiet: 1 },
+    )
+    if (!project) return
+    const action = await call(
+      'cost_estimate.estimation.project_from_deal.get_deal_project_action',
+      { crm_deal: props.dealId },
+    )
+    if (doc.value && action?.project) {
+      doc.value.custom_project = action.project
+    }
+    applyOpenProjectAction(action)
+    if (!hadProject && !projectToastShown.value) {
+      projectToastShown.value = true
+      toast.success(__('Project {0} created — use Open Project', [project]))
+    }
+    counts.reload()
+  } catch (e) {
+    /* hook may still create it */
+  }
 }
 
 watch(reload, (value) => {
-  if (value) counts.reload()
+  if (value) {
+    counts.reload()
+    if (doc.value?.status === 'Closed Won') ensureDealProject('Closed Won')
+  }
 })
 </script>

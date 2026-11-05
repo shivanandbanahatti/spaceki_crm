@@ -229,11 +229,14 @@
             v-model="form.notes"
             :placeholder="__('Glass thickness, finish, location…')"
           />
-          <FormControl
-            type="select"
+          <Link
             :label="__('Product Group')"
-            :options="productGroupOptions"
-            v-model="form.product_group"
+            doctype="Estimation Product Group"
+            :value="form.product_group"
+            @change="(v) => (form.product_group = v)"
+            :onCreate="(v, close) => openNewProductGroupDialog(v, close, 'boq')"
+            :filters="{ is_active: 1 }"
+            :placeholder="__('Search / select group…')"
           />
           <Link
             :label="__('System Template (optional)')"
@@ -289,20 +292,26 @@
       <template #body-content>
         <div class="flex flex-col gap-3" v-if="estimateRow">
           <p class="text-sm text-ink-gray-7">{{ estimateRow.description }}</p>
-          <FormControl
-            type="select"
+          <Link
             :label="__('Product Group')"
-            :options="productGroupOptions"
-            v-model="estimateForm.product_group"
+            doctype="Estimation Product Group"
+            :value="estimateForm.product_group"
+            @change="(v) => (estimateForm.product_group = v)"
+            :onCreate="(v, close) => openNewProductGroupDialog(v, close, 'estimate')"
+            :filters="{ is_active: 1 }"
+            :placeholder="__('Search / select group…')"
           />
           <Link
-            :label="__('System Template')"
+            :label="__('System Template *')"
             doctype="Estimation Template"
             :value="estimateForm.system_template"
             @change="(v) => (estimateForm.system_template = v)"
             :onCreate="createTemplateForEstimate"
             :placeholder="__('Search / select template…')"
           />
+          <p class="text-xs text-ink-gray-5 -mt-1">
+            {{ __('Required to create an estimation — select a product BOM template') }}
+          </p>
           <FormControl
             type="select"
             :label="__('Dim Unit')"
@@ -324,8 +333,80 @@
         </div>
       </template>
       <template #actions>
-        <Button class="w-full" variant="solid" :loading="!!busy" @click="confirmCreateEstimate">
+        <Button
+          class="w-full"
+          variant="solid"
+          :loading="!!busy"
+          :disabled="!estimateForm.system_template"
+          @click="confirmCreateEstimate"
+        >
           {{ estimateAsVersion ? __('Create Version') : __('Create Estimate') }}
+        </Button>
+      </template>
+    </Dialog>
+
+    <!-- New Estimation Template (from Link Create New) -->
+    <Dialog
+      v-model="showNewTemplateDialog"
+      :options="{ title: __('New System Template') }"
+    >
+      <template #body-content>
+        <div class="flex flex-col gap-3">
+          <p class="text-sm text-ink-gray-6">
+            {{ __('Enter a name for the new template. You can add BOM cost lines after it is created.') }}
+          </p>
+          <FormControl
+            :label="__('Template Name *')"
+            v-model="newTemplateForm.name"
+            :placeholder="__('e.g. Custom Spider Glazing')"
+          />
+          <Link
+            :label="__('Product Group')"
+            doctype="Estimation Product Group"
+            :value="newTemplateForm.system_group"
+            @change="(v) => (newTemplateForm.system_group = v)"
+            :onCreate="(v, close) => openNewProductGroupDialog(v, close, 'template')"
+            :filters="{ is_active: 1 }"
+            :placeholder="__('Search / select group…')"
+          />
+        </div>
+      </template>
+      <template #actions>
+        <Button
+          class="w-full"
+          variant="solid"
+          :loading="creatingTemplate"
+          :disabled="!newTemplateForm.name?.trim()"
+          @click="confirmNewTemplate"
+        >
+          {{ __('Create Template') }}
+        </Button>
+      </template>
+    </Dialog>
+
+    <!-- New Product Group -->
+    <Dialog
+      v-model="showNewProductGroupDialog"
+      :options="{ title: __('New Product Group') }"
+    >
+      <template #body-content>
+        <div class="flex flex-col gap-3">
+          <FormControl
+            :label="__('Group Name *')"
+            v-model="newProductGroupName"
+            :placeholder="__('e.g. Canopy & Skylight')"
+          />
+        </div>
+      </template>
+      <template #actions>
+        <Button
+          class="w-full"
+          variant="solid"
+          :loading="creatingProductGroup"
+          :disabled="!newProductGroupName?.trim()"
+          @click="confirmNewProductGroup"
+        >
+          {{ __('Create Product Group') }}
         </Button>
       </template>
     </Dialog>
@@ -336,20 +417,6 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Button, Badge, Dialog, FormControl, call, createResource, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
-
-const PRODUCT_GROUPS = [
-  '',
-  'Curtain Wall & Glazing',
-  'Stick Glazing',
-  'Unitised Glazing',
-  'Glass Supply',
-  'Spider Glazing',
-  'Windows & Doors',
-  'Cladding & Feature',
-  'Flashings & Misc',
-  'MS Fabrication',
-  'Glass Railings',
-]
 
 const MM_DEFAULT_GROUPS = new Set(['Spider Glazing', 'Windows & Doors'])
 
@@ -372,6 +439,17 @@ const resolvedId = computed(() => props.parentId || props.leadId || props.dealId
 
 const showDialog = ref(false)
 const showEstimateDialog = ref(false)
+const showNewTemplateDialog = ref(false)
+const showNewProductGroupDialog = ref(false)
+const creatingTemplate = ref(false)
+const creatingProductGroup = ref(false)
+const newTemplateTarget = ref('boq') // 'boq' | 'estimate'
+const newProductGroupTarget = ref('boq') // 'boq' | 'estimate' | 'template'
+const newTemplateForm = reactive({
+  name: '',
+  system_group: '',
+})
+const newProductGroupName = ref('')
 const editingName = ref(null)
 const saving = ref(false)
 const busy = ref(null)
@@ -444,10 +522,6 @@ const colCount = computed(() => {
   if (data.value.show_cost) n += 1
   return n
 })
-
-const productGroupOptions = computed(() =>
-  PRODUCT_GROUPS.map((g) => ({ label: g || __('— Select group —'), value: g })),
-)
 
 const dimUnitOptions = [
   { label: 'mm', value: 'mm' },
@@ -613,33 +687,143 @@ function openEdit(row) {
 }
 
 async function createUom(value, close) {
-  const name = (value || '').trim()
-  if (!name) return
-  await call('cost_estimate.estimation.api.add_uom', { uom_name: name })
-  form.uom = name
-  if (close) close()
+  const name = (typeof value === 'string' ? value : value?.label || value?.value || '').trim()
+  if (!name) {
+    toast.create({
+      title: __('UOM name required'),
+      text: __('Type a unit name in the search box, then click Create New'),
+      icon: 'alert-triangle',
+      iconClasses: 'text-ink-amber-3',
+    })
+    return
+  }
+  try {
+    await call('cost_estimate.estimation.api.add_uom', { uom_name: name })
+    form.uom = name
+    if (close) close()
+  } catch (e) {
+    toast.create({
+      title: __('Could not create UOM'),
+      text: e?.messages?.[0] || e?.message || __('Please try again'),
+      icon: 'x',
+      iconClasses: 'text-ink-red-3',
+    })
+  }
 }
 
-async function createTemplate(value, close) {
-  const name = (value || '').trim()
-  if (!name) return
-  const code = await call('cost_estimate.estimation.api.add_estimation_template', {
-    template_name: name,
-    system_group: form.product_group || null,
-  })
-  form.system_template = code
-  if (close) close()
+function extractSearchName(value) {
+  if (typeof value === 'string') return value.trim()
+  if (value && typeof value === 'object') {
+    return String(value.label || value.value || '').trim()
+  }
+  return ''
 }
 
-async function createTemplateForEstimate(value, close) {
-  const name = (value || '').trim()
-  if (!name) return
-  const code = await call('cost_estimate.estimation.api.add_estimation_template', {
-    template_name: name,
-    system_group: estimateForm.product_group || null,
-  })
-  estimateForm.system_template = code
+function createTemplate(value, close) {
+  openNewTemplateDialog(value, close, 'boq', form.product_group || '')
+}
+
+function createTemplateForEstimate(value, close) {
+  openNewTemplateDialog(value, close, 'estimate', estimateForm.product_group || '')
+}
+
+function openNewTemplateDialog(value, close, target, systemGroup) {
   if (close) close()
+  newTemplateTarget.value = target
+  newTemplateForm.name = extractSearchName(value)
+  newTemplateForm.system_group = systemGroup || ''
+  showNewTemplateDialog.value = true
+}
+
+async function confirmNewTemplate() {
+  const name = (newTemplateForm.name || '').trim()
+  if (!name) {
+    toast.create({
+      title: __('Template name required'),
+      text: __('Enter a name for the new System Template'),
+      icon: 'alert-triangle',
+      iconClasses: 'text-ink-amber-3',
+    })
+    return
+  }
+  creatingTemplate.value = true
+  try {
+    const code = await call('cost_estimate.estimation.api.add_estimation_template', {
+      template_name: name,
+      system_group: newTemplateForm.system_group || null,
+    })
+    if (newTemplateTarget.value === 'estimate') {
+      estimateForm.system_template = code
+    } else {
+      form.system_template = code
+    }
+    showNewTemplateDialog.value = false
+    toast.create({
+      title: __('Template created'),
+      text: __('Opening the template so you can add BOM lines'),
+      icon: 'check',
+      iconClasses: 'text-ink-green-3',
+    })
+    if (code) window.open('/app/estimation-template/' + encodeURIComponent(code), '_blank')
+  } catch (e) {
+    toast.create({
+      title: __('Could not create template'),
+      text: e?.messages?.[0] || e?.message || __('Please try again'),
+      icon: 'x',
+      iconClasses: 'text-ink-red-3',
+    })
+  } finally {
+    creatingTemplate.value = false
+  }
+}
+
+function openNewProductGroupDialog(value, close, target) {
+  if (close) close()
+  newProductGroupTarget.value = target
+  newProductGroupName.value = extractSearchName(value)
+  showNewProductGroupDialog.value = true
+}
+
+async function confirmNewProductGroup() {
+  const name = (newProductGroupName.value || '').trim()
+  if (!name) {
+    toast.create({
+      title: __('Group name required'),
+      text: __('Enter a name for the new Product Group'),
+      icon: 'alert-triangle',
+      iconClasses: 'text-ink-amber-3',
+    })
+    return
+  }
+  creatingProductGroup.value = true
+  try {
+    const group = await call('cost_estimate.estimation.api.add_product_group', {
+      group_name: name,
+    })
+    if (newProductGroupTarget.value === 'estimate') {
+      estimateForm.product_group = group
+    } else if (newProductGroupTarget.value === 'template') {
+      newTemplateForm.system_group = group
+    } else {
+      form.product_group = group
+    }
+    showNewProductGroupDialog.value = false
+    toast.create({
+      title: __('Product Group created'),
+      text: group,
+      icon: 'check',
+      iconClasses: 'text-ink-green-3',
+    })
+  } catch (e) {
+    toast.create({
+      title: __('Could not create product group'),
+      text: e?.messages?.[0] || e?.message || __('Please try again'),
+      icon: 'x',
+      iconClasses: 'text-ink-red-3',
+    })
+  } finally {
+    creatingProductGroup.value = false
+  }
 }
 
 async function saveItem() {
@@ -687,7 +871,10 @@ function openCreateEstimate(row, asVersion = false) {
   estimateRow.value = row
   estimateAsVersion.value = asVersion
   estimateForm.product_group = row.product_group || ''
-  estimateForm.system_template = row.system_template || ''
+  // Prefill only when the stored value is a known template code/name.
+  // Legacy Spaceki labels (e.g. "Stick Glazing - Site Glazed") must be re-picked.
+  const tpl = row.system_template || ''
+  estimateForm.system_template = /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(tpl) ? tpl : ''
   estimateForm.dim_unit =
     row.dim_unit || (MM_DEFAULT_GROUPS.has(row.product_group) ? 'mm' : 'm')
   showEstimateDialog.value = true

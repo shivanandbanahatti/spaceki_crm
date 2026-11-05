@@ -18,6 +18,8 @@ export function useRelatedCounts(doctype, getDocname) {
         attachments: 0,
         comments: 0,
         work: 0,
+        quotations: 0,
+        quotation_drafts: 0,
         boq: 0,
         ...(data || {}),
       }
